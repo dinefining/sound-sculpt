@@ -17,7 +17,7 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit;text-t
 .panel{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(300px,calc(100% - 32px));display:flex;flex-direction:column;
   text-transform:none;letter-spacing:.02em;font-size:22px;text-align:left;color:var(--ink)}
 .panel.info{width:min(560px,calc(100% - 32px))}
-.ph{height:41px;flex:none;margin-top:max(40px,10vh);display:flex;align-items:center;justify-content:flex-start;color:var(--tint,#bfeeb0);border-bottom:1px solid rgba(242,242,239,.22)}
+.ph{height:41px;flex:none;margin-top:32px;display:flex;align-items:center;justify-content:flex-start;color:var(--tint,#bfeeb0);border-bottom:1px solid rgba(242,242,239,.22)}
 .ph button{display:none}
 .pb{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:16px 0 35vh;
   -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 120px),transparent 100%);
@@ -30,9 +30,7 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .row.cat{color:var(--tint,#bfeeb0);margin-top:20px}
 .row.cat:first-of-type{margin-top:8px}
 /* info: short, so it sits still in the middle */
-.panel.info{justify-content:center}
-.panel.info .ph{margin-top:0}
-.panel.info .pb{flex:none;overflow:visible;padding:16px 0 0;-webkit-mask-image:none;mask-image:none}
+.panel.info .pb{padding-bottom:96px}
 /* info: plain page, highlighted words */
 .prose{font-size:18px;line-height:1.3;color:var(--ink)}
 .prose p{margin:0 0 16px}
@@ -94,10 +92,10 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 #knobs{display:grid;grid-template-columns:repeat(18,minmax(0,1fr));margin-left:-1px}
 .bank{display:contents}
 .knob{display:flex;flex-direction:column;cursor:ns-resize;touch-action:none;min-width:0}
-.lb{position:relative;z-index:5;font-size:12px;height:16px;line-height:16px;padding:0 4px;white-space:nowrap}
+.lb{position:relative;z-index:5;font-size:12px;height:27px;line-height:15px;padding:0 4px 1px;white-space:nowrap;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}
 .lb .v{display:none}
 .knob:hover .lb .n,.knob.drag .lb .n{display:none}
-.knob:hover .lb .v,.knob.drag .lb .v{display:inline}
+.knob:hover .lb .v,.knob.drag .lb .v{display:block}
 .cell{position:relative;height:var(--ch);background:var(--cell);border-top:1px solid var(--line);border-left:1px solid var(--line);display:flex;align-items:center;justify-content:center}
 .dial{position:relative;width:calc(var(--ch)*0.54);height:calc(var(--ch)*0.54);border-radius:50%;
   box-shadow:0 0 0 calc(var(--ch)*0.04) var(--collar), inset 0 calc(var(--ch)*-0.025) 0 rgba(0,0,0,.14);transition:opacity .2s, filter .12s}
@@ -108,9 +106,9 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .knob:hover .dial,.knob.drag .dial{filter:brightness(1.07)}
 .knob.idle .dial{filter:grayscale(1);opacity:.28}
 .knob.idle .lb{color:#b4b4ae}
-.ov{display:none;position:absolute;left:4px;bottom:100%;font-size:10px;letter-spacing:.06em;color:var(--rec);line-height:1;margin-bottom:1px}
+.ov{visibility:hidden;font-size:10px;letter-spacing:.06em;color:var(--rec);line-height:11px}
 .knob.over .lb .n{color:var(--rec)}
-.knob.over .ov{display:block}
+.knob.over .ov{visibility:visible}
 #fileIn{display:none}
 
 @media (max-width:720px){
@@ -119,3 +117,10 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
   .lb{font-size:10px;padding:0 2px;letter-spacing:0}
   #info{width:auto;left:8px;right:8px}
 }
+
+/* record */
+#recBtn.on{background:var(--rec);color:#fff}
+#recBtn.on svg{animation:recpulse 1.2s ease-in-out infinite}
+@keyframes recpulse{50%{opacity:.35}}
+#recTime{display:none;align-items:center;height:30px;padding:0 4px;font-size:14px;color:var(--rec)}
+#recTime.on{display:flex}

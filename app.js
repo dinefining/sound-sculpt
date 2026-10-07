@@ -618,6 +618,34 @@ function encodeWav(buf){
   let o = 44; for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++){ const v = clamp(data[c][i], -1, 1); dv.setInt16(o, v < 0 ? v*0x8000 : v*0x7fff, true); o += 2; }
   return new Blob([dv], {type:'audio/wav'});
 }
+let take = null;
+function fmtTake(sec){ const m = Math.floor(sec/60), s = Math.floor(sec % 60); return m + ':' + String(s).padStart(2, '0'); }
+function toggleRecord(){
+  initAudio();
+  if (take){
+    const t = take; take = null;
+    A.limit.disconnect(t.node); t.node.disconnect(); t.node.onaudioprocess = null;
+    if (t.len > 0){
+      const out = new AudioBuffer({numberOfChannels:2, length:t.len, sampleRate:ctx.sampleRate});
+      for (let c = 0; c < 2; c++){ const d = out.getChannelData(c); let o = 0; for (const ch of t.chunks[c]){ d.set(ch, o); o += ch.length; } }
+      const url = URL.createObjectURL(encodeWav(out)), a = document.createElement('a');
+      a.href = url; a.download = `sound-sculpt-take-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.wav`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+    renderUI(); return;
+  }
+  const node = ctx.createScriptProcessor(4096, 2, 2), mute = ctx.createGain(); mute.gain.value = 0;
+  take = {node, chunks:[[], []], len:0, max:ctx.sampleRate*600};          // ten minutes at most
+  node.onaudioprocess = e => {
+    if (!take || take.node !== node) return;
+    for (let c = 0; c < 2; c++) take.chunks[c].push(new Float32Array(e.inputBuffer.getChannelData(Math.min(c, e.inputBuffer.numberOfChannels - 1))));
+    take.len += e.inputBuffer.length;
+    if (take.len >= take.max) toggleRecord();
+  };
+  A.limit.connect(node); node.connect(mute); mute.connect(ctx.destination);
+  if (!S.playing) play();
+  renderUI();
+}
 let exporting = false;
 const LOOPS = 4;
 function exportPlan(){
@@ -767,7 +795,7 @@ canvas.addEventListener('pointermove', e => {
     const [a, b] = [...ptrs.values()];
     const mx = (a.x+b.x)/2, my = (a.y+b.y)/2, d = Math.hypot(a.x-b.x, a.y-b.y);
     orbit(mx - gesture.mx, my - gesture.my);
-    if (gesture.d > 0 && d > 0) zoom(gesture.d/d);
+    if (gesture.d > 0 && d > 0) zoom(d/gesture.d);
     gesture.mx = mx; gesture.my = my; gesture.d = d;
   }
   else if (gesture.type === 'push') doPush(e);
@@ -838,7 +866,7 @@ function buildKnobs(el, list, idx0){
     const idx = CONTROLS.indexOf(pr);
     const k = document.createElement('div'); k.className = 'knob' + (pr === BRUSH ? ' tool' : '');
     const cap = idx < 0 ? 'ct' : 'c' + ((idx % 4) + 1);
-    k.innerHTML = `<span class="lb"><span class="n">${pr.label}<sup class="ov">OVER</sup></span><span class="v"></span></span><div class="cell"><div class="dial ${cap}"><div class="ptr"></div></div></div>`;
+    k.innerHTML = `<span class="lb"><span class="ov">OVER</span><span class="n">${pr.label}</span><span class="v"></span></span><div class="cell"><div class="dial ${cap}"><div class="ptr"></div></div></div>`;
     const kn = {pr, idx, el:k, ptr:k.querySelector('.ptr'), v:k.querySelector('.v'), txt:'', ang:null};
     KN.push(kn);
     const getT = () => pr === BRUSH ? valToPos(pr, S.brush) : valToPos(pr, V[pr.k]);
@@ -863,6 +891,7 @@ buildKnobs($('bankB'), CONTROLS.slice(7), 7);
 
 /* --------------------------------------------------------------------- UI */
 const ICON = {
+  rec:   '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" fill="currentColor"/></svg>',
   play:  '<svg viewBox="0 0 16 16"><path d="M3.5 2v12L14 8z" fill="currentColor"/></svg>',
   pause: '<svg viewBox="0 0 16 16"><rect x="3" y="2.5" width="3.6" height="11" fill="currentColor"/><rect x="9.4" y="2.5" width="3.6" height="11" fill="currentColor"/></svg>',
   undo:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5.5 3 2.5 6l3 3"/><path d="M2.5 6h7a4 4 0 0 1 0 8H7"/></svg>',
@@ -872,6 +901,7 @@ const ICON = {
   axes:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="3"/><path d="M8 1v4M8 11v4M1 8h4M11 8h4M3 3l2.2 2.2M10.8 10.8 13 13M13 3l-2.2 2.2M5.2 10.8 3 13"/></svg>',
   info:  '<svg viewBox="0 0 16 16"><rect x="7" y="2.5" width="2" height="2" fill="currentColor"/><rect x="7" y="6.5" width="2" height="7" fill="currentColor"/></svg>',
 };
+$('recBtn').innerHTML = ICON.rec; $('recBtn').addEventListener('click', toggleRecord);
 $('upBtn').innerHTML = ICON.up; $('downBtn').innerHTML = ICON.down; $('undoBtn').innerHTML = ICON.undo; $('redoBtn').innerHTML = ICON.redo; $('infoBtn').innerHTML = ICON.info; $('axesBtn').innerHTML = ICON.axes;
 const axLabels = CONTROLS.map(c => { const e = document.createElement('span'); e.textContent = c.label; $('axLabels').appendChild(e); return e; });
 function toggleAxes(){ S.axes = !S.axes; spokes.visible = S.axes; $('axLabels').hidden = !S.axes; $('axesBtn').classList.toggle('on', S.axes); }
@@ -918,7 +948,16 @@ function placePanel(){}
 function openPanel(title, html, cls){ $('mTitle').textContent = title; modal.querySelector('.panel').className = 'panel' + (cls ? ' ' + cls : ''); mBody.innerHTML = html; modal.hidden = false; placePanel(); mBody.scrollTop = 0; }
 function closePanel(){ modal.hidden = true; }
 $('mClose').addEventListener('click', closePanel);
-modal.addEventListener('pointerdown', e => { if (!e.target.closest('button.row > span, .row.cat > span, .prose p > *, .prose p, #mTitle')) closePanel(); });
+let mTap = null;
+const onText = el => el.closest('button.row > span, .row.cat > span, .prose p, #mTitle');
+modal.addEventListener('pointerdown', e => { mTap = {x:e.clientX, y:e.clientY, t:performance.now()}; });
+modal.addEventListener('pointercancel', () => { mTap = null; });      // the browser took over to scroll
+modal.addEventListener('pointerup', e => {
+  if (!mTap) return;
+  const still = Math.hypot(e.clientX - mTap.x, e.clientY - mTap.y) < 10 && performance.now() - mTap.t < 600;
+  mTap = null;
+  if (still && !onText(e.target)) closePanel();
+});
 
 function openSounds(){
   let html = '<button class="row" data-id="__load"><span>Load file…</span></button>';
@@ -950,6 +989,7 @@ function openInfo(){
 <p>Drag knobs vertically, ${k('⇧')} for fine, double-click to reset. Grey means inactive until its partner moves. <span class="r">OVER</span> means a spot is past its range; the sound holds at the limit.</p>
 <p>${k('SPACE')} play · ${k('R')} reset sphere · ${k('⌘')} ${k('Z')} undo · ${k('⇧')} ${k('⌘')} ${k('Z')} redo · ${k('ESC')} close.</p>
 <p>Download ${b('1×')} renders one pass or one note. ${b('4×')} renders a seamless loop with reverb and echo tails wrapped to the start. Drop an audio file onto the sphere to load it.</p>
+<p>${b('●')} records everything you play and tweak; press it again to save the take as a WAV.</p>
 </div>`, 'info');
 }
 $('infoBtn').addEventListener('click', openInfo);
@@ -975,6 +1015,8 @@ function renderUI(){
   $('downBtn').classList.toggle('busy', exporting);
   $('downBtn').setAttribute('aria-label', exporting ? 'Rendering WAV…' : 'Download WAV');
   $('smp').textContent = S.sample === 'file' ? S.fileName : SAMPLES.find(s => s[0] === S.sample)[1];
+  $('recBtn').classList.toggle('on', !!take); $('recBtn').setAttribute('aria-label', take ? 'Stop recording and save WAV' : 'Record');
+  $('recTime').classList.toggle('on', !!take);
   $('undoBtn').disabled = hpos <= 0;
   $('redoBtn').disabled = hpos >= hist.length - 1;
 }
@@ -1034,6 +1076,7 @@ function frame(now){
   const f = d ? playPos/d : 0, px = Math.round(f*bar.clientWidth);
   dot.style.left = clamp(px, 3, bar.clientWidth - 3) + 'px'; fill.style.width = px + 'px';
 
+  if (take) $('recTime').textContent = '● ' + fmtTake(take.len/ctx.sampleRate);
   updateHover();
   const dist = baseDist/cam.zoom;
   camera.position.set(0, 0, dist);
