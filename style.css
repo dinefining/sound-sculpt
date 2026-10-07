@@ -112,6 +112,9 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 #fileIn{display:none}
 
 @media (max-width:720px){
+  .panel,.panel.info{width:calc(100% - 32px)}
+  .ph{margin-top:16px;height:auto;padding-bottom:12px;align-items:flex-start;line-height:1}
+  .ph span{display:block}
   #app{--ch:calc(100vw/9)}
   #knobs{grid-template-columns:repeat(9,minmax(0,1fr))}
   .lb{font-size:10px;padding:0 2px;letter-spacing:0}
