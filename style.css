@@ -39,7 +39,7 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .prose .r{color:#ff5a4a}
 
 /* sound name next to play */
-.name{height:30px;padding:0 12px;display:flex;align-items:center;font-size:14px;max-width:50vw;color:var(--ink)}
+.name{height:30px;padding:0 12px 0 16px;display:flex;align-items:center;font-size:14px;max-width:50vw;color:var(--ink)}
 .name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid transparent}
 .name:hover span{border-bottom-color:var(--ink)}
 
@@ -53,7 +53,7 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 #colBtn.open,#downBtn.open{background:var(--key-h)}
 
 /* overlays */
-#axesBtn.on{background:var(--ink);color:var(--body)}
+#axesBtn.on{background:var(--key-h)}
 #axLabels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
 #axLabels[hidden]{display:none}
 #axLabels span{position:absolute;left:0;top:0;font-size:11px;color:#77776f;white-space:nowrap}
@@ -74,7 +74,7 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .grp{position:absolute;top:0;display:flex;z-index:4}
 .grp.tl{left:0}.grp.tr{right:0}
 .sq{height:30px;min-width:30px;background:var(--key);border:0 solid var(--line);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--ink);transition:background .12s, opacity .12s}
-.tl .sq{border-width:0 1px 1px 0}.tr .sq{border-width:0 0 1px 1px}
+.tl .sq{border-width:0 1px 1px 0}.tl .sq#playBtn{border-left-width:1px}.tr .sq{border-width:0 0 1px 1px}
 .sq:hover{background:var(--key-h)}
 .sq svg{width:14px;height:14px;display:block;flex:none}
 .sq.txt{padding:0 10px;font-size:14px;max-width:46vw}
@@ -82,7 +82,8 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .sq.txt svg{width:9px;height:9px;transition:transform .15s}
 .sq.txt.open{background:var(--ink);color:var(--body)}
 .sq.txt.open svg{transform:rotate(180deg)}
-.sq:disabled{opacity:.35;cursor:default}
+.sq:disabled{cursor:default}
+.sq:disabled svg{opacity:.3}
 .sq:disabled:hover{background:var(--key)}
 #playBtn.on{background:var(--c4);color:#fff}
 #downBtn.busy{background:var(--ink);color:var(--body);cursor:progress}
@@ -92,10 +93,10 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 #knobs{display:grid;grid-template-columns:repeat(18,minmax(0,1fr));margin-left:-1px}
 .bank{display:contents}
 .knob{display:flex;flex-direction:column;cursor:ns-resize;touch-action:none;min-width:0}
-.lb{position:relative;z-index:5;font-size:12px;height:27px;line-height:15px;padding:0 4px 1px;white-space:nowrap;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}
+.lb{position:relative;z-index:5;font-size:12px;height:16px;line-height:16px;padding:0 4px;white-space:nowrap;overflow:hidden}
 .lb .v{display:none}
 .knob:hover .lb .n,.knob.drag .lb .n{display:none}
-.knob:hover .lb .v,.knob.drag .lb .v{display:block}
+.knob:hover .lb .v,.knob.drag .lb .v{display:inline}
 .cell{position:relative;height:var(--ch);background:var(--cell);border-top:1px solid var(--line);border-left:1px solid var(--line);display:flex;align-items:center;justify-content:center}
 .dial{position:relative;width:calc(var(--ch)*0.54);height:calc(var(--ch)*0.54);border-radius:50%;
   box-shadow:0 0 0 calc(var(--ch)*0.04) var(--collar), inset 0 calc(var(--ch)*-0.025) 0 rgba(0,0,0,.14);transition:opacity .2s, filter .12s}
@@ -106,9 +107,7 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .knob:hover .dial,.knob.drag .dial{filter:brightness(1.07)}
 .knob.idle .dial{filter:grayscale(1);opacity:.28}
 .knob.idle .lb{color:#b4b4ae}
-.ov{visibility:hidden;font-size:10px;letter-spacing:.06em;color:var(--rec);line-height:11px}
 .knob.over .lb .n{color:var(--rec)}
-.knob.over .ov{visibility:visible}
 #fileIn{display:none}
 
 @media (max-width:720px){
@@ -125,5 +124,4 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 #recBtn.on{background:var(--rec);color:#fff}
 #recBtn.on svg{animation:recpulse 1.2s ease-in-out infinite}
 @keyframes recpulse{50%{opacity:.35}}
-#recTime{display:none;align-items:center;height:30px;padding:0 4px;font-size:14px;color:var(--rec)}
-#recTime.on{display:flex}
+.name.rec{color:var(--rec)}

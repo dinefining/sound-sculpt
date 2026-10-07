@@ -619,7 +619,7 @@ function encodeWav(buf){
   return new Blob([dv], {type:'audio/wav'});
 }
 let take = null;
-function fmtTake(sec){ const m = Math.floor(sec/60), s = Math.floor(sec % 60); return m + ':' + String(s).padStart(2, '0'); }
+function fmtTake(sec){ const m = Math.floor(sec/60), s = Math.floor(sec % 60); return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0'); }
 function toggleRecord(){
   initAudio();
   if (take){
@@ -866,7 +866,7 @@ function buildKnobs(el, list, idx0){
     const idx = CONTROLS.indexOf(pr);
     const k = document.createElement('div'); k.className = 'knob' + (pr === BRUSH ? ' tool' : '');
     const cap = idx < 0 ? 'ct' : 'c' + ((idx % 4) + 1);
-    k.innerHTML = `<span class="lb"><span class="ov">OVER</span><span class="n">${pr.label}</span><span class="v"></span></span><div class="cell"><div class="dial ${cap}"><div class="ptr"></div></div></div>`;
+    k.innerHTML = `<span class="lb"><span class="n">${pr.label}</span><span class="v"></span></span><div class="cell"><div class="dial ${cap}"><div class="ptr"></div></div></div>`;
     const kn = {pr, idx, el:k, ptr:k.querySelector('.ptr'), v:k.querySelector('.v'), txt:'', ang:null};
     KN.push(kn);
     const getT = () => pr === BRUSH ? valToPos(pr, S.brush) : valToPos(pr, V[pr.k]);
@@ -986,7 +986,7 @@ function openInfo(){
 <p>Drag the sphere up to pull, down to push. Every knob owns a spot: pull there to raise it, push to lower it. Knobs resting at an end, like ${b('DRIVE')} or ${b('CUTOFF')}, move away from rest either way. Broad or hard strokes reach several spots at once.</p>
 <p>Hover a knob to see its spot, ${k('A')} to see all of them. Drag around the sphere to rotate, ${k('⇧')} + scroll or pinch to zoom.</p>
 <p>${b('BRUSH')} sets stroke size: ${k('[')} ${k(']')}, scroll, or its knob.</p>
-<p>Drag knobs vertically, ${k('⇧')} for fine, double-click to reset. Grey means inactive until its partner moves. <span class="r">OVER</span> means a spot is past its range; the sound holds at the limit.</p>
+<p>Drag knobs vertically, ${k('⇧')} for fine, double-click to reset. Grey means inactive until its partner moves. A knob name in <span class="r">red</span> means its spot is pushed past either end of its range; the sound holds at that end.</p>
 <p>${k('SPACE')} play · ${k('R')} reset sphere · ${k('⌘')} ${k('Z')} undo · ${k('⇧')} ${k('⌘')} ${k('Z')} redo · ${k('ESC')} close.</p>
 <p>Download ${b('1×')} renders one pass or one note. ${b('4×')} renders a seamless loop with reverb and echo tails wrapped to the start. Drop an audio file onto the sphere to load it.</p>
 <p>${b('●')} records everything you play and tweak; press it again to save the take as a WAV.</p>
@@ -1014,9 +1014,9 @@ function renderUI(){
   $('playBtn').classList.toggle('on', S.playing);
   $('downBtn').classList.toggle('busy', exporting);
   $('downBtn').setAttribute('aria-label', exporting ? 'Rendering WAV…' : 'Download WAV');
-  $('smp').textContent = S.sample === 'file' ? S.fileName : SAMPLES.find(s => s[0] === S.sample)[1];
+  if (!take) $('smp').textContent = S.sample === 'file' ? S.fileName : SAMPLES.find(s => s[0] === S.sample)[1];
   $('recBtn').classList.toggle('on', !!take); $('recBtn').setAttribute('aria-label', take ? 'Stop recording and save WAV' : 'Record');
-  $('recTime').classList.toggle('on', !!take);
+  $('smpBtn').classList.toggle('rec', !!take);
   $('undoBtn').disabled = hpos <= 0;
   $('redoBtn').disabled = hpos >= hist.length - 1;
 }
@@ -1076,7 +1076,7 @@ function frame(now){
   const f = d ? playPos/d : 0, px = Math.round(f*bar.clientWidth);
   dot.style.left = clamp(px, 3, bar.clientWidth - 3) + 'px'; fill.style.width = px + 'px';
 
-  if (take) $('recTime').textContent = '● ' + fmtTake(take.len/ctx.sampleRate);
+  if (take) $('smp').textContent = fmtTake(take.len/ctx.sampleRate);
   updateHover();
   const dist = baseDist/cam.zoom;
   camera.position.set(0, 0, dist);
