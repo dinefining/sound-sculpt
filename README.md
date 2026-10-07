@@ -16,6 +16,12 @@ python3 -m http.server
 
 To publish with GitHub Pages: push this folder to a repo, then Settings → Pages → deploy from the `main` branch, root folder.
 
+### Share preview
+
+`og-image.png` (1200 × 630) is the link preview. The tags in `index.html` point to `https://dinefining.github.io/sound-sculpt/og-image.png`, so the repo should be named `sound-sculpt`. If you name it differently, update the three addresses (`og:url`, `og:image`, `twitter:image`).
+
+Live at: https://dinefining.github.io/sound-sculpt/
+
 ## Using it
 
 - **Drag the sphere** up to pull the surface out, down to push it in. Pulling at a knob's spot raises it, pushing lowers it. Broad or hard strokes reach several spots.
@@ -32,3 +38,4 @@ To publish with GitHub Pages: push this folder to a repo, then Settings → Page
 - `index.html` — markup
 - `style.css` — styles
 - `app.js` — geometry, audio engine, sound synthesis, UI
+- `og-image.png` — share preview image
