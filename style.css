@@ -1,5 +1,5 @@
 :root{
-  --body:#efefec; --strip:#e2e2de; --cell:#e6e6e2; --key:#dcdcd7; --key-h:#d1d1cc; --line:#cdcdc8; --collar:#d3d3ce;
+  --body:#efefec; --strip:#e2e2de; --cell:#e6e6e2; --key:#dcdcd7; --key-h:#d1d1cc; --key-on:#c2c2bc; --line:#b8b8b2; --collar:#d3d3ce;
   --ink:#1b1b1b; --mute:#8c8c86; --rec:#e5342a;
   --c1:#2f63e0; --c2:#1fae6b; --c3:#fbfbf8; --c4:#ff5a1f;
 }
@@ -18,7 +18,9 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit;text-t
   text-transform:none;letter-spacing:.02em;font-size:22px;text-align:left;color:var(--ink)}
 .panel.info{width:min(560px,calc(100% - 32px))}
 .ph{height:41px;flex:none;margin-top:32px;display:flex;align-items:center;justify-content:flex-start;color:var(--tint,#bfeeb0);border-bottom:1px solid rgba(242,242,239,.22)}
-.ph button{display:none}
+.ph{justify-content:space-between}
+.ph button{display:flex;align-items:center;justify-content:center;width:41px;align-self:stretch;margin-bottom:-1px;border-left:1px solid rgba(242,242,239,.22);color:var(--ink)}
+.ph button:hover{color:var(--tint,#bfeeb0)}
 .pb{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:16px 0 35vh;
   -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 120px),transparent 100%);
           mask-image:linear-gradient(to bottom,#000 calc(100% - 120px),transparent 100%)}
@@ -39,7 +41,7 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .prose .r{color:#ff5a4a}
 
 /* sound name next to play */
-.name{height:30px;padding:0 12px 0 16px;display:flex;align-items:center;font-size:14px;max-width:50vw;color:var(--ink)}
+.name{height:30px;padding:0 12px 0 16px;display:flex;align-items:center;font-size:14px;flex:0 1 auto;min-width:0;color:var(--ink)}
 .name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid transparent}
 .name:hover span{border-bottom-color:var(--ink)}
 
@@ -50,17 +52,17 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
   border:0 solid var(--line);border-width:0 0 1px 1px;font-size:14px;color:var(--ink);transition:background .12s}
 .pop button:hover{background:var(--key-h)}
 .pop i{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
-#colBtn.open,#downBtn.open{background:var(--key-h)}
+#colBtn.open,#downBtn.open{background:var(--key-on)}
 
 /* overlays */
-#axesBtn.on{background:var(--key-h)}
+#axesBtn.on{background:var(--key-on)}
 #axLabels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
 #axLabels[hidden]{display:none}
 #axLabels span{position:absolute;left:0;top:0;font-size:11px;color:#77776f;white-space:nowrap}
-.knob.tool .cell{background:var(--key-h);border-right:2px solid var(--line)}
+.knob.tool .cell{background:var(--key-h)}
 .knob.tool .lb{color:var(--mute)}
-.dial.ct{background:#3a3a37}
-.dial.ct .ptr::after{background:#fff}
+.dial.ct,.knob:hover .dial.ct,.knob.drag .dial.ct{background:#3a3a37;box-shadow:none}
+.dial.ct .ptr::after{background:#e6e6e2}
 #colBtn i{width:14px;height:14px;border-radius:50%;display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
 
 /* play strip */
@@ -71,10 +73,11 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 /* stage + keys */
 #stage{position:relative;min-height:0;min-width:0}
 #stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
-.grp{position:absolute;top:0;display:flex;z-index:4}
-.grp.tl{left:0}.grp.tr{right:0}
+.topbar{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;z-index:4;pointer-events:none}
+.topbar > *{pointer-events:auto}
+.keys{display:flex;flex:none}
 .sq{height:30px;min-width:30px;background:var(--key);border:0 solid var(--line);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--ink);transition:background .12s, opacity .12s}
-.tl .sq{border-width:0 1px 1px 0}.tl .sq#playBtn{border-left-width:1px}.tr .sq{border-width:0 0 1px 1px}
+.keys .sq{border-width:0 0 1px 1px}
 .sq:hover{background:var(--key-h)}
 .sq svg{width:14px;height:14px;display:block;flex:none}
 .sq.txt{padding:0 10px;font-size:14px;max-width:46vw}
@@ -85,7 +88,6 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .sq:disabled{cursor:default}
 .sq:disabled svg{opacity:.3}
 .sq:disabled:hover{background:var(--key)}
-#playBtn.on{background:var(--c4);color:#fff}
 #downBtn.busy{background:var(--ink);color:var(--body);cursor:progress}
 #stage.over::after{content:'DROP AUDIO';position:absolute;inset:8px;border:1px dashed var(--mute);display:flex;align-items:center;justify-content:center;color:var(--mute)}
 
@@ -98,22 +100,20 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .knob:hover .lb .n,.knob.drag .lb .n{display:none}
 .knob:hover .lb .v,.knob.drag .lb .v{display:inline}
 .cell{position:relative;height:var(--ch);background:var(--cell);border-top:1px solid var(--line);border-left:1px solid var(--line);display:flex;align-items:center;justify-content:center}
-.dial{position:relative;width:calc(var(--ch)*0.54);height:calc(var(--ch)*0.54);border-radius:50%;
-  box-shadow:0 0 0 calc(var(--ch)*0.04) var(--collar), inset 0 calc(var(--ch)*-0.025) 0 rgba(0,0,0,.14);transition:opacity .2s, filter .12s}
-.dial.c1{background:var(--c1)}.dial.c2{background:var(--c2)}.dial.c3{background:var(--c3)}.dial.c4{background:var(--c4)}
+.dial{position:relative;width:calc(var(--ch)*0.54);height:calc(var(--ch)*0.54);border-radius:50%;overflow:hidden;background:#fbfbf8;
+  box-shadow:inset 0 0 0 1.5px var(--kring,#9db4ee);transition:background .15s}
 .ptr{position:absolute;inset:0}
-.ptr::after{content:'';position:absolute;left:50%;top:9%;width:max(2px,calc(var(--ch)*0.035));height:30%;border-radius:2px;transform:translateX(-50%);background:#fff}
-.dial.c3 .ptr::after{background:var(--ink)}
-.knob:hover .dial,.knob.drag .dial{filter:brightness(1.07)}
-.knob.idle .dial{filter:grayscale(1);opacity:.28}
+.ptr::after{content:'';position:absolute;left:50%;top:1px;width:1.5px;height:calc(50% - 1px);transform:translateX(-50%);background:var(--kring,#9db4ee)}
+.knob:hover .dial,.knob.drag .dial{background:#fff}
+.knob.idle .dial{background:#e3e3df;box-shadow:inset 0 0 0 1px #cdcdc8}
+.knob.idle .ptr::after{background:#b0b0aa}
 .knob.idle .lb{color:#b4b4ae}
 .knob.over .lb .n{color:var(--rec)}
 #fileIn{display:none}
 
 @media (max-width:720px){
   .panel,.panel.info{width:calc(100% - 32px)}
-  .ph{margin-top:16px;height:auto;padding-bottom:12px;align-items:flex-start;line-height:1}
-  .ph span{display:block}
+  .ph{margin-top:7px}
   #app{--ch:calc(100vw/9)}
   #knobs{grid-template-columns:repeat(9,minmax(0,1fr))}
   .lb{font-size:10px;padding:0 2px;letter-spacing:0}

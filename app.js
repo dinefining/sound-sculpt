@@ -1,6 +1,7 @@
 (() => {
 'use strict';
 const TAU = Math.PI * 2;
+const COARSE = matchMedia('(pointer:coarse)').matches;   // touch-first devices
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const $ = id => document.getElementById(id);
 
@@ -77,7 +78,7 @@ function buildTopo(n, tris){
 /* ---------------------------------------------------------------- three */
 const stage = $('stage');
 const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, matchMedia('(pointer:coarse)').matches ? 1.5 : 2));
 renderer.setClearColor(0xefefec, 1);
 const canvas = renderer.domElement;
 stage.prepend(canvas);
@@ -90,19 +91,26 @@ camera.add(sun); scene.add(camera);
 
 const group = new THREE.Group(); scene.add(group);
 const meshMat = new THREE.ShaderMaterial({
-  uniforms:{uColor:{value:new THREE.Color(0x2ae22a)}},
-  vertexShader:`varying vec3 vN; varying vec3 vV;
-    void main(){ vN = normalize(normalMatrix*normal); vec4 mv = modelViewMatrix*vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
-  fragmentShader:`uniform vec3 uColor; varying vec3 vN; varying vec3 vV;
+  uniforms:{uColor:{value:new THREE.Color(0x3a3a37)}},
+  vertexShader:`varying vec3 vN; varying vec3 vV; varying vec3 vP;
+    void main(){ vP = position; vN = normalize(normalMatrix*normal); vec4 mv = modelViewMatrix*vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
+  fragmentShader:`uniform vec3 uColor; varying vec3 vN; varying vec3 vV; varying vec3 vP;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+    float h3(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7)))*43758.5453); }
+    float vnoise(vec3 p){                                    // value noise that sticks to the surface
+      vec3 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f);
+      return mix(mix(mix(h3(i), h3(i+vec3(1,0,0)), f.x), mix(h3(i+vec3(0,1,0)), h3(i+vec3(1,1,0)), f.x), f.y),
+                 mix(mix(h3(i+vec3(0,0,1)), h3(i+vec3(1,0,1)), f.x), mix(h3(i+vec3(0,1,1)), h3(i+vec3(1,1,1)), f.x), f.y), f.z);
+    }
     void main(){
-      vec3 n = normalize(vN);
-      float diff = max(dot(n, normalize(vec3(-0.45,0.6,0.85))), 0.0);
-      float shade = 0.66 + 0.38*diff;                       // soft key light
-      float grad = mix(0.9, 1.05, n.y*0.5 + 0.5);            // lighter on top, a touch darker underneath
+      vec3 n = normalize(vN), L = normalize(vec3(-0.5,0.62,0.75));
+      float diff = max(dot(n, L), 0.0);
+      float shade = 0.64 + 0.36*diff;                        // same dark end as before
+      vec3 c = uColor*shade;
+      c = mix(c, c + vec3(0.16) + uColor*0.18, pow(diff, 3.0)*0.55);   // lighter end, rolling off from the light like a soft highlight
       float rim = pow(1.0 - max(dot(n, normalize(vV)), 0.0), 3.0);
-      vec3 c = uColor*shade*grad + rim*0.06;
-      c += (hash(gl_FragCoord.xy) - 0.5)*0.045;              // fine grain
+      c += rim*0.04;
+      c += (hash(gl_FragCoord.xy) - 0.5)*0.06;               // fine grain
       gl_FragColor = vec4(c, 1.0);
     }`
 });
@@ -246,7 +254,7 @@ function buildGraph(c){
   A.lfo = c.createOscillator(); A.lfo.frequency.value = 0.7;
   A.lfoAmt = c.createGain(); A.lfoAmt.gain.value = 0;
   A.lfo.connect(A.lfoAmt); A.lfoAmt.connect(A.chDelay.delayTime); A.lfo.start();
-  A.conv = c.createConvolver(); A.conv.buffer = IR || (IR = makeIR(c, 2.8));
+  A.conv = c.createConvolver(); A.conv.buffer = IR || (IR = makeIR(c, 2.2));
   A.revWet = c.createGain(); A.revWet.gain.value = 0;
   A.dryB = c.createGain();
   A.master = c.createGain();
@@ -271,10 +279,11 @@ let IR = null;
 function initAudio(){
   if (ctx){ if (ctx.state !== 'running') ctx.resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
-  ctx = new AC();
+  ctx = new AC({latencyHint: COARSE ? 'playback' : 'interactive'});
   A = buildGraph(ctx);
   A.an = ctx.createAnalyser(); A.an.fftSize = 512;
-  A.limit.connect(A.an); A.an.connect(ctx.destination);
+  A.out = ctx.createGain(); A.out.gain.value = COARSE ? 0.6 : 0.8;
+  A.limit.connect(A.an); A.an.connect(A.out); A.out.connect(ctx.destination);
   levelBuf = new Float32Array(A.an.fftSize);
   setCurve(0);
   applyAudio(params, true);
@@ -296,7 +305,7 @@ function makeCurve(a){
 function setCurve(a, G){
   G = G || A; if (G === A) curveAmt = a;
   G.shaper.curve = makeCurve(a);
-  G.shaper.oversample = a > 0 ? '4x' : 'none';
+  G.shaper.oversample = a > 0 ? '2x' : 'none';
 }
 
 function applyAudio(p, now, G, C){
@@ -625,6 +634,7 @@ function toggleRecord(){
   if (take){
     const t = take; take = null;
     A.limit.disconnect(t.node); t.node.disconnect(); t.node.onaudioprocess = null;
+    if (S.playing) stopAll(T.release);          // stopping a take also stops playback
     if (t.len > 0){
       const out = new AudioBuffer({numberOfChannels:2, length:t.len, sampleRate:ctx.sampleRate});
       for (let c = 0; c < 2; c++){ const d = out.getChannelData(c); let o = 0; for (const ch of t.chunks[c]){ d.set(ch, o); o += ch.length; } }
@@ -898,7 +908,7 @@ const ICON = {
   redo:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.5 3l3 3-3 3"/><path d="M13.5 6h-7a4 4 0 0 0 0 8H9"/></svg>',
   up:    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 11V2.5M4.5 6 8 2.5 11.5 6M3 14h10"/></svg>',
   down:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2V10.5M4.5 7 8 10.5 11.5 7M3 14h10"/></svg>',
-  axes:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="3"/><path d="M8 1v4M8 11v4M1 8h4M11 8h4M3 3l2.2 2.2M10.8 10.8 13 13M13 3l-2.2 2.2M5.2 10.8 3 13"/></svg>',
+  axes:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2"/></svg>',
   info:  '<svg viewBox="0 0 16 16"><rect x="7" y="2.5" width="2" height="2" fill="currentColor"/><rect x="7" y="6.5" width="2" height="7" fill="currentColor"/></svg>',
 };
 $('recBtn').innerHTML = ICON.rec; $('recBtn').addEventListener('click', toggleRecord);
@@ -994,11 +1004,14 @@ function openInfo(){
 }
 $('infoBtn').addEventListener('click', openInfo);
 
-const COLOURS = ['#2ae22a','#2f63e0','#ff5a1f','#ff6fb5','#3a3a37'];   // green, blue, orange, pink, charcoal
-let sphereColour = '#2ae22a';
+const COLOURS = ['#3a3a37','#2f63e0','#2ae22a','#ff5a1f','#ff6fb5'];   // charcoal, blue, green, orange, pink
+let sphereColour = '#3a3a37';                 // charcoal by default
 function setColour(c){ sphereColour = c; meshMat.uniforms.uColor.value.set(c);
   const k = new THREE.Color(c).lerp(new THREE.Color(0xf7f7f4), 0.72); document.documentElement.style.setProperty('--tint', '#' + k.getHexString());
-  const ac = new THREE.Color(c).lerp(new THREE.Color(0x000000), 0.28); document.documentElement.style.setProperty('--accent', '#' + ac.getHexString()); $('colBtn').innerHTML = `<i style="background:${c}"></i>`; }
+  const ac = new THREE.Color(c).lerp(new THREE.Color(0x000000), 0.28); document.documentElement.style.setProperty('--accent', '#' + ac.getHexString());
+  // knobs follow the sphere: pointer in its colour, outline in a lighter tone of it
+  const kr = new THREE.Color(c).lerp(new THREE.Color(0xfbfbf8), 0.5);
+  document.documentElement.style.setProperty('--kptr', c); document.documentElement.style.setProperty('--kring', '#' + kr.getHexString()); $('colBtn').innerHTML = `<i style="background:${c}"></i>`; }
 function openColour(){
   const wasOpen = !$('colPop').hidden; closePops(); if (wasOpen) return;
   $('colPop').innerHTML = COLOURS.filter(c => c !== sphereColour).map(c => `<button data-c="${c}" aria-label="${c}"><i style="background:${c}"></i></button>`).join('');
