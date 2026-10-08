@@ -20,16 +20,29 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit;text-t
 .ph{height:41px;flex:none;margin-top:32px;display:flex;align-items:center;justify-content:flex-start;color:var(--tint,#bfeeb0);border-bottom:1px solid rgba(242,242,239,.22)}
 .ph{justify-content:space-between}
 .ph button{display:flex;align-items:center;justify-content:center;width:41px;align-self:stretch;margin-bottom:-1px;border-left:1px solid rgba(242,242,239,.22);color:var(--ink)}
-.ph button:hover{color:var(--tint,#bfeeb0)}
+
 .pb{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:16px 0 35vh;
   -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 120px),transparent 100%);
           mask-image:linear-gradient(to bottom,#000 calc(100% - 120px),transparent 100%)}
 .pb::-webkit-scrollbar{display:none}
 .row{height:40px;display:flex;align-items:center;justify-content:flex-start;width:100%;white-space:nowrap;color:var(--ink)}
 .row > span{padding:0}
-button.row:hover > span{color:var(--tint,#bfeeb0)}
+
 .row.sel > span{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:6px}
 .row.cat{color:var(--tint,#bfeeb0);margin-top:20px}
+/* recorder inside the Sounds list */
+.recbox{margin:4px 0 12px;color:var(--ink)}
+.recbox[hidden]{display:none}
+.recbox .wave{display:block;width:100%;height:72px;border-top:1px solid rgba(242,242,239,.22);border-bottom:1px solid rgba(242,242,239,.22)}
+.recbar{display:flex;align-items:stretch;justify-content:space-between;height:41px;border-bottom:1px solid rgba(242,242,239,.22)}
+.rtime{align-self:center;font-size:22px;color:var(--ink)}
+.recbox.on .rtime{color:var(--rec)}
+.rkeys{display:flex}
+.rk{width:41px;display:flex;align-items:center;justify-content:center;border-left:1px solid rgba(242,242,239,.22);color:var(--ink)}
+.rk.rr{color:var(--rec)}
+.rk:disabled{cursor:default}
+.rk:disabled svg{opacity:.3}
+.row.open > span{color:var(--tint,#bfeeb0)}
 .row.cat:first-of-type{margin-top:8px}
 /* info: short, so it sits still in the middle */
 .panel.info .pb{padding-bottom:96px}
@@ -39,18 +52,20 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .prose b{font-weight:400;background:var(--tint,#d6f5c6);color:#1b1b1b;padding:0 3px}
 .prose kbd{font:inherit;background:#e6c3f5;color:#1b1b1b;padding:0 4px;margin:0 1px}
 .prose .r{color:#ff5a4a}
+.prose a{color:#1b1b1b;background:#ffc6a8;padding:0 3px;text-decoration:none}
+.prose a:hover{text-decoration:underline}
 
 /* sound name next to play */
 .name{height:30px;padding:0 12px 0 16px;display:flex;align-items:center;font-size:14px;flex:0 1 auto;min-width:0;color:var(--ink)}
 .name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid transparent}
-.name:hover span{border-bottom-color:var(--ink)}
+
 
 /* drop-downs under a corner button */
 .pop{position:absolute;top:30px;z-index:6;display:flex;flex-direction:column;box-sizing:border-box}
 .pop[hidden]{display:none !important}
 .pop button{width:100%;height:30px;display:flex;align-items:center;justify-content:center;background:var(--key);
   border:0 solid var(--line);border-width:0 0 1px 1px;font-size:14px;color:var(--ink);transition:background .12s}
-.pop button:hover{background:var(--key-h)}
+
 .pop i{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
 #colBtn.open,#downBtn.open{background:var(--key-on)}
 
@@ -59,9 +74,10 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 #axLabels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
 #axLabels[hidden]{display:none}
 #axLabels span{position:absolute;left:0;top:0;font-size:11px;color:#77776f;white-space:nowrap}
+#axLabels span.inv{color:#e6e6e2}
 .knob.tool .cell{background:var(--key-h)}
 .knob.tool .lb{color:var(--mute)}
-.dial.ct,.knob:hover .dial.ct,.knob.drag .dial.ct{background:#3a3a37;box-shadow:none}
+.dial.ct,.knob.drag .dial.ct{background:#3a3a37;box-shadow:none}
 .dial.ct .ptr::after{background:#e6e6e2}
 #colBtn i{width:14px;height:14px;border-radius:50%;display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
 
@@ -78,7 +94,7 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .keys{display:flex;flex:none}
 .sq{height:30px;min-width:30px;background:var(--key);border:0 solid var(--line);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--ink);transition:background .12s, opacity .12s}
 .keys .sq{border-width:0 0 1px 1px}
-.sq:hover{background:var(--key-h)}
+
 .sq svg{width:14px;height:14px;display:block;flex:none}
 .sq.txt{padding:0 10px;font-size:14px;max-width:46vw}
 .sq.txt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -87,7 +103,7 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .sq.txt.open svg{transform:rotate(180deg)}
 .sq:disabled{cursor:default}
 .sq:disabled svg{opacity:.3}
-.sq:disabled:hover{background:var(--key)}
+
 #downBtn.busy{background:var(--ink);color:var(--body);cursor:progress}
 #stage.over::after{content:'DROP AUDIO';position:absolute;inset:8px;border:1px dashed var(--mute);display:flex;align-items:center;justify-content:center;color:var(--mute)}
 
@@ -97,14 +113,14 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
 .knob{display:flex;flex-direction:column;cursor:ns-resize;touch-action:none;min-width:0}
 .lb{position:relative;z-index:5;font-size:12px;height:16px;line-height:16px;padding:0 4px;white-space:nowrap;overflow:hidden}
 .lb .v{display:none}
-.knob:hover .lb .n,.knob.drag .lb .n{display:none}
-.knob:hover .lb .v,.knob.drag .lb .v{display:inline}
+.knob.drag .lb .n{display:none}
+.knob.drag .lb .v{display:inline}
 .cell{position:relative;height:var(--ch);background:var(--cell);border-top:1px solid var(--line);border-left:1px solid var(--line);display:flex;align-items:center;justify-content:center}
 .dial{position:relative;width:calc(var(--ch)*0.54);height:calc(var(--ch)*0.54);border-radius:50%;overflow:hidden;background:#fbfbf8;
   box-shadow:inset 0 0 0 1.5px var(--kring,#9db4ee);transition:background .15s}
 .ptr{position:absolute;inset:0}
 .ptr::after{content:'';position:absolute;left:50%;top:1px;width:1.5px;height:calc(50% - 1px);transform:translateX(-50%);background:var(--kring,#9db4ee)}
-.knob:hover .dial,.knob.drag .dial{background:#fff}
+.knob.drag .dial{background:#fff}
 .knob.idle .dial{background:#e3e3df;box-shadow:inset 0 0 0 1px #cdcdc8}
 .knob.idle .ptr::after{background:#b0b0aa}
 .knob.idle .lb{color:#b4b4ae}
@@ -118,10 +134,29 @@ button.row:hover > span{color:var(--tint,#bfeeb0)}
   #knobs{grid-template-columns:repeat(9,minmax(0,1fr))}
   .lb{font-size:10px;padding:0 2px;letter-spacing:0}
   #info{width:auto;left:8px;right:8px}
+  #bankB .knob:nth-child(n+2) .lb{border-top:1px solid var(--line);line-height:15px}   /* line under the top row */
+  .dial{box-shadow:inset 0 0 0 1px var(--kring,#9db4ee)}
+  .ptr::after{width:1px}
 }
 
 /* record */
 #recBtn.on{background:var(--rec);color:#fff}
 #recBtn.on svg{animation:recpulse 1.2s ease-in-out infinite}
 @keyframes recpulse{50%{opacity:.35}}
-.name.rec{color:var(--rec)}
+.name.rec{color:var(--rec);font-size:20px}
+
+/* hover only where there is a real pointer — on touch screens :hover sticks after a tap */
+@media (hover:hover){
+  .ph button:hover{color:var(--tint,#bfeeb0)}
+  button.row:hover > span{color:var(--tint,#bfeeb0)}
+  .name:hover span{border-bottom-color:var(--ink)}
+  .pop button:hover{background:var(--key-h)}
+  .rk:not(:disabled):hover{background:rgba(242,242,239,.08)}
+  .sq:hover{background:var(--key-h)}
+  .sq:disabled:hover{background:var(--key)}
+  .knob:hover .lb .n{display:none}
+  .knob:hover .lb .v{display:inline}
+  .knob:hover .dial{background:#fff}
+  .knob:hover .dial.ct{background:#3a3a37;box-shadow:none}
+  .knob.idle:hover .dial{background:#e3e3df;box-shadow:inset 0 0 0 1px #cdcdc8}
+}

@@ -91,10 +91,10 @@ camera.add(sun); scene.add(camera);
 
 const group = new THREE.Group(); scene.add(group);
 const meshMat = new THREE.ShaderMaterial({
-  uniforms:{uColor:{value:new THREE.Color(0x3a3a37)}},
+  uniforms:{uColor:{value:new THREE.Color(0x3a3a37)}, uGrain:{value:300}},
   vertexShader:`varying vec3 vN; varying vec3 vV; varying vec3 vP;
     void main(){ vP = position; vN = normalize(normalMatrix*normal); vec4 mv = modelViewMatrix*vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
-  fragmentShader:`uniform vec3 uColor; varying vec3 vN; varying vec3 vV; varying vec3 vP;
+  fragmentShader:`uniform vec3 uColor; uniform float uGrain; varying vec3 vN; varying vec3 vV; varying vec3 vP;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
     float h3(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7)))*43758.5453); }
     float vnoise(vec3 p){                                    // value noise that sticks to the surface
@@ -110,7 +110,9 @@ const meshMat = new THREE.ShaderMaterial({
       c = mix(c, c + vec3(0.16) + uColor*0.18, pow(diff, 3.0)*0.55);   // lighter end, rolling off from the light like a soft highlight
       float rim = pow(1.0 - max(dot(n, normalize(vV)), 0.0), 3.0);
       c += rim*0.04;
-      c += (hash(gl_FragCoord.xy) - 0.5)*0.06;               // fine grain
+      vec3 gp = normalize(vP)*uGrain;                        // grain lives on the surface and turns with it
+      float g = 0.6*vnoise(gp) + 0.4*vnoise(gp*2.03 + 17.0);
+      c += (g - 0.5)*0.11;
       gl_FragColor = vec4(c, 1.0);
     }`
 });
@@ -120,15 +122,16 @@ const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ringPts
   new THREE.LineBasicMaterial({color:0x000000, transparent:true, opacity:0.35, depthTest:false}));
 ring.visible = false; ring.renderOrder = 3; group.add(ring);
 
-// marker for the axis of the knob under the pointer
-const markTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  g.strokeStyle = '#1b1b1b'; g.lineWidth = 3; g.beginPath(); g.arc(32,32,26,0,TAU); g.stroke();
-  g.fillStyle = '#1b1b1b'; g.beginPath(); g.arc(32,32,6,0,TAU); g.fill(); return new THREE.CanvasTexture(c); })();
-const marker = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0,0,0],3)),
-  new THREE.PointsMaterial({size:13, sizeAttenuation:false, map:markTex, transparent:true, depthTest:false}));
-marker.visible = false; marker.renderOrder = 4; marker.frustumCulled = false; group.add(marker);
-const spokes = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(17*6), 3)),
-  new THREE.LineBasicMaterial({color:0x8c8c86, transparent:true, opacity:0.6}));
+const spokes = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(17*6), 3))
+    .setAttribute('color', new THREE.BufferAttribute(new Float32Array(17*6).fill(0.55), 3)),
+  new THREE.LineBasicMaterial({vertexColors:true, transparent:true, opacity:0.6}));
+// on a dark sphere, the axis bits that sit in front of it switch to a light grey
+let axInvert = false;
+// a hovered knob whose spot is round the back: its axis is drawn dashed, through the sphere, and its label faded
+const ghost = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3)),
+  new THREE.LineDashedMaterial({color:0x8c8c86, dashSize:0.035, gapSize:0.03, transparent:true, opacity:1, depthTest:false}));
+ghost.visible = false; ghost.renderOrder = 3; ghost.frustumCulled = false; group.add(ghost);
+const AX_DARK = new THREE.Color(0x8c8c86), AX_LIGHT = new THREE.Color(0xe6e6e2);
 spokes.visible = false; spokes.frustumCulled = false; group.add(spokes);
 
 /* ------------------------------------------------------- the sphere: radius only */
@@ -627,8 +630,101 @@ function encodeWav(buf){
   let o = 44; for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++){ const v = clamp(data[c][i], -1, 1); dv.setInt16(o, v < 0 ? v*0x8000 : v*0x7fff, true); o += 2; }
   return new Blob([dv], {type:'audio/wav'});
 }
-let take = null;
+let take = null, mic = null, micTake = null, micGain = 1;
 function fmtTake(sec){ const m = Math.floor(sec/60), s = Math.floor(sec % 60); return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0'); }
+const MIC_MAX = 30;                                  // seconds
+const MIC_BIN = 1024;                                // samples per waveform bar
+async function startMic(){
+  initAudio(); if (take) toggleRecord();
+  if (S.playing) stopAll(T.release);               // no speakers feeding the mic
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}}); }
+  catch (e){ recMsg('NO MIC ACCESS'); return; }
+  if (ctx.state !== 'running') ctx.resume();
+  const srcN = ctx.createMediaStreamSource(stream), node = ctx.createScriptProcessor(4096, 1, 1), mute = ctx.createGain(); mute.gain.value = 0;
+  micTake = null;
+  mic = {stream, srcN, node, mute, chunks:[], len:0, peaks:[]};
+  node.onaudioprocess = e => {
+    if (!mic || mic.node !== node) return;
+    const d = new Float32Array(e.inputBuffer.getChannelData(0));
+    mic.chunks.push(d); mic.len += d.length;
+    for (let i = 0; i < d.length; i += MIC_BIN){ let p = 0; for (let j = i; j < Math.min(d.length, i + MIC_BIN); j++) p = Math.max(p, Math.abs(d[j])); mic.peaks.push(p); }
+    if (mic.len >= ctx.sampleRate*MIC_MAX) stopMic();
+  };
+  srcN.connect(node); node.connect(mute); mute.connect(ctx.destination);
+  recUI();
+}
+function stopMic(){
+  const m = mic; mic = null; if (!m) return;
+  m.srcN.disconnect(); m.node.disconnect(); m.node.onaudioprocess = null; m.mute.disconnect(); m.stream.getTracks().forEach(t => t.stop());
+  const d = new Float32Array(m.len); let o = 0; for (const c of m.chunks){ d.set(c, o); o += c.length; }
+  // trim the silence either side and bring the level up
+  let peak = 0; for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+  const th = Math.max(0.01, peak*0.04), pad = Math.round(ctx.sampleRate*0.01);
+  let a = 0, b = d.length - 1; while (a < b && Math.abs(d[a]) < th) a++; while (b > a && Math.abs(d[b]) < th) b--;
+  a = Math.max(0, a - pad); b = Math.min(d.length, b + pad*4);
+  if (peak < 0.002 || b - a < ctx.sampleRate*0.05){ micTake = null; recUI(); recMsg('NOTHING HEARD'); return; }
+  const out = ctx.createBuffer(1, b - a, ctx.sampleRate), od = out.getChannelData(0), g = 0.9/peak, f = Math.min(pad, (b - a) >> 2);
+  for (let i = 0; i < b - a; i++) od[i] = d[a + i]*g*Math.min(1, i/f, (b - a - 1 - i)/f);   // tiny fades, no clicks
+  micTake = out; micGain = g; recUI();
+}
+function useMic(){
+  if (!micTake) return;
+  fileBuf = micTake; micTake = null; S.fileName = 'Mic take'; S.sample = 'file'; playPos = 0; startOff = 0;
+  closePanel(); renderUI();
+}
+function resetMic(){ if (mic) stopMic(); micTake = null; recUI(); }
+
+/* the recorder that opens inside the Sounds list */
+const PX = rows => { const h = rows.length, w = rows[0].length; let r = '';
+  rows.forEach((row, y) => { for (let x = 0; x < w; x++) if (row[x] === '#') r += `<rect x="${x}" y="${y}" width="1" height="1"/>`; });
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w*2}" height="${h*2}" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true">${r}</svg>`; };
+const PIX = {
+  rec:   PX(['..####..','.######.','########','########','########','########','.######.','..####..']),
+  stop:  PX(['########','########','########','########','########','########','########','########']),
+  reset: PX(['..####..','.#....#.','#......#','#......#','#....###','.#....#.','..##..#.','........']),
+  use:   PX(['........','.......#','......#.','#....#..','.#..#...','..##....','........','........'])
+};
+function recMarkup(){
+  return `<div class="recbox"><canvas class="wave"></canvas>
+<div class="recbar"><span class="rtime">00:00</span><span class="rkeys">
+<button class="rk" data-r="reset" aria-label="Discard">${PIX.reset}</button><button class="rk rr" data-r="rec" aria-label="Record">${PIX.rec}</button><button class="rk" data-r="use" aria-label="Use this take">${PIX.use}</button>
+</span></div></div>`;
+}
+let recMsgT = 0;
+function recMsg(t){ const el = mBody.querySelector('.rtime'); if (el){ el.textContent = t; recMsgT = performance.now() + 1800; } }
+function recUI(){
+  const box = mBody.querySelector('.recbox'); if (!box) return;
+  const r = box.querySelector('[data-r="rec"]');
+  r.innerHTML = mic ? PIX.stop : PIX.rec; r.setAttribute('aria-label', mic ? 'Stop' : 'Record'); box.classList.toggle('on', !!mic);
+  box.querySelector('[data-r="reset"]').disabled = !mic && !micTake;
+  box.querySelector('[data-r="use"]').disabled = !micTake || !!mic;
+}
+let waving = false;
+function drawWave(){ if (!waving){ waving = true; waveFrame(); } }
+function waveFrame(){
+  const box = mBody.querySelector('.recbox'); if (!box || box.hidden || modal.hidden){ waving = false; return; }
+  const cv = box.querySelector('.wave'), dpr = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const step = 4, bw = 2, n = Math.floor(w/step), mid = h/2;
+  let bars = null;
+  if (mic) bars = mic.peaks.slice(-n);                                   // live: newest on the right
+  else if (micTake){                                                      // finished: the whole take, squeezed to fit
+    const d = micTake.getChannelData(0), per = d.length/n; bars = [];
+    for (let i = 0; i < n; i++){ let p = 0; for (let j = Math.floor(i*per); j < Math.floor((i + 1)*per); j++) p = Math.max(p, Math.abs(d[j])); bars.push(p/micGain); }
+  }
+  const css = getComputedStyle(box);
+  g.fillStyle = mic ? css.getPropertyValue('--rec') || '#e5342a' : css.color;
+  if (!bars || !bars.length){ g.globalAlpha = 0.3; g.fillRect(0, Math.round(mid), w, 1); g.globalAlpha = 1; }
+  else {
+    const off = mic ? n - bars.length : 0;
+    bars.forEach((p, i) => { const bh = Math.max(1, Math.round(Math.sqrt(Math.min(1, p))*h*0.92)); g.fillRect((off + i)*step, Math.round(mid - bh/2), bw, bh); });
+  }
+  const t = box.querySelector('.rtime');
+  if (performance.now() > recMsgT) t.textContent = fmtTake(mic ? mic.len/ctx.sampleRate : micTake ? micTake.duration : 0);
+  requestAnimationFrame(waveFrame);
+}
 function toggleRecord(){
   initAudio();
   if (take){
@@ -846,27 +942,46 @@ function updateHover(){
   }
   // show where the hovered / turned knob lives on the sphere
   const kk = knobDrag ? knobDrag.kn.idx : knobHover;
-  if (kk != null && kk >= 0){
-    const i = AXW[kk].center, a = marker.geometry.attributes.position;
-    a.setXYZ(0, P[3*i]*1.01, P[3*i+1]*1.01, P[3*i+2]*1.01); a.needsUpdate = true; marker.visible = true;
-  } else marker.visible = false;
-  if (S.axes) drawAxes();
+  // a hovered / turned knob shows just its own axis; A or the axes key shows them all
+  const one = kk != null && kk >= 0 ? kk : null, show = S.axes || one != null;
+  spokes.visible = show; $('axLabels').hidden = !show; if (!show) ghost.visible = false;
+  if (show) drawAxes(S.axes ? null : one);
 }
-function drawAxes(){
+function drawAxes(only){
   const pa = spokes.geometry.attributes.position, r = canvas.getBoundingClientRect();
   const view = tmpV.copy(camera.position).normalize().applyQuaternion(group.quaternion.clone().invert());
+  const ca = spokes.geometry.attributes.color;
+  ghost.visible = false;
+  let rs = 0; for (let i = 0; i < AXW.length; i++) rs += R[AXW[i].center]; const rMean = rs/AXW.length;
   AX.forEach((a, k) => {
     const i = AXW[k].center, rc = R[i], r1 = rc*1.004, r2 = rc + 0.16, rl = rc + 0.27;
     const el = axLabels[k], facing = a.x*view.x + a.y*view.y + a.z*view.z;
-    if (facing < -0.15){ pa.setXYZ(2*k, 0, 0, 0); pa.setXYZ(2*k+1, 0, 0, 0); el.style.display = 'none'; return; }
+    const behind = facing < -0.15;
+    if ((only != null && k !== only) || (behind && only == null)){ pa.setXYZ(2*k, 0, 0, 0); pa.setXYZ(2*k+1, 0, 0, 0); el.style.display = 'none'; return; }
+    if (behind){
+      pa.setXYZ(2*k, 0, 0, 0); pa.setXYZ(2*k+1, 0, 0, 0);
+      const side = Math.sqrt(Math.max(0, 1 - facing*facing)), over = axInvert && rl*side < rMean*0.98, sOver = axInvert && (r1 + r2)/2*side < rMean*0.98;
+      const ga = ghost.geometry.attributes.position; ga.setXYZ(0, a.x*r1, a.y*r1, a.z*r1); ga.setXYZ(1, a.x*r2, a.y*r2, a.z*r2); ga.needsUpdate = true;
+      ghost.geometry.computeBoundingSphere(); ghost.computeLineDistances();
+      ghost.material.color.set(sOver ? 0xe6e6e2 : 0x8c8c86); ghost.visible = true;
+      const tip = new THREE.Vector3(a.x*rl, a.y*rl, a.z*rl).applyMatrix4(group.matrixWorld).project(camera);
+      el.classList.toggle('inv', over); el.style.display = ''; el.style.opacity = 0.7;
+      el.style.transform = `translate(${(tip.x + 1)/2*r.width}px,${(1 - tip.y)/2*r.height}px) translate(-50%,-50%)`;
+      return;
+    }
     pa.setXYZ(2*k, a.x*r1, a.y*r1, a.z*r1); pa.setXYZ(2*k+1, a.x*r2, a.y*r2, a.z*r2);
+    const side = Math.sqrt(Math.max(0, 1 - facing*facing));          // how far off the line of sight, 0 = dead centre
+    const onSpoke = axInvert && facing > 0 && (r1 + r2)/2*side < rMean*0.92;
+    const onLabel = axInvert && facing > 0 && rl*side < rMean*0.92;
+    const sc = onSpoke ? AX_LIGHT : AX_DARK; ca.setXYZ(2*k, sc.r, sc.g, sc.b); ca.setXYZ(2*k+1, sc.r, sc.g, sc.b);
+    el.classList.toggle('inv', onLabel);
     const tip = new THREE.Vector3(a.x*rl, a.y*rl, a.z*rl).applyMatrix4(group.matrixWorld).project(camera);
     if (tip.z > 1){ el.style.display = 'none'; return; }
     el.style.display = '';
     el.style.opacity = facing < 0.1 ? 0.45 : 1;
     el.style.transform = `translate(${(tip.x + 1)/2*r.width}px,${(1 - tip.y)/2*r.height}px) translate(-50%,-50%)`;
   });
-  pa.needsUpdate = true;
+  pa.needsUpdate = true; ca.needsUpdate = true;
 }
 
 /* --------------------------------------------------------------------- knobs */
@@ -914,7 +1029,7 @@ const ICON = {
 $('recBtn').innerHTML = ICON.rec; $('recBtn').addEventListener('click', toggleRecord);
 $('upBtn').innerHTML = ICON.up; $('downBtn').innerHTML = ICON.down; $('undoBtn').innerHTML = ICON.undo; $('redoBtn').innerHTML = ICON.redo; $('infoBtn').innerHTML = ICON.info; $('axesBtn').innerHTML = ICON.axes;
 const axLabels = CONTROLS.map(c => { const e = document.createElement('span'); e.textContent = c.label; $('axLabels').appendChild(e); return e; });
-function toggleAxes(){ S.axes = !S.axes; spokes.visible = S.axes; $('axLabels').hidden = !S.axes; $('axesBtn').classList.toggle('on', S.axes); }
+function toggleAxes(){ S.axes = !S.axes; $('axesBtn').classList.toggle('on', S.axes); }
 $('axesBtn').addEventListener('click', toggleAxes);
 $('upBtn').addEventListener('click', () => { initAudio(); $('fileIn').click(); });
 $('fileIn').addEventListener('change', e => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ''; });
@@ -956,21 +1071,23 @@ const modal = $('modal'), mBody = $('mBody');
 // panels sit over the sphere's resting outline: about half its diameter wide, three-quarters tall, same size for every panel
 function placePanel(){}
 function openPanel(title, html, cls){ $('mTitle').textContent = title; modal.querySelector('.panel').className = 'panel' + (cls ? ' ' + cls : ''); mBody.innerHTML = html; modal.hidden = false; placePanel(); mBody.scrollTop = 0; }
-function closePanel(){ modal.hidden = true; }
-$('mClose').addEventListener('click', closePanel);
+function closePanel(){ if (mic) stopMic(); modal.hidden = true; }
+$('mClose').addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); closePanel(); });
 let mTap = null;
-const onText = el => el.closest('button.row > span, .row.cat > span, .prose p, #mTitle');
+const onText = el => el.closest('button.row > span, .row.cat > span, .prose p, #mTitle, .recbox');
 modal.addEventListener('pointerdown', e => { mTap = {x:e.clientX, y:e.clientY, t:performance.now()}; });
 modal.addEventListener('pointercancel', () => { mTap = null; });      // the browser took over to scroll
 modal.addEventListener('pointerup', e => {
   if (!mTap) return;
   const still = Math.hypot(e.clientX - mTap.x, e.clientY - mTap.y) < 10 && performance.now() - mTap.t < 600;
   mTap = null;
-  if (still && !onText(e.target)) closePanel();
+  mTapOk = still && !onText(e.target);
 });
+let mTapOk = false;
+modal.addEventListener('click', e => { if (mTapOk){ e.stopPropagation(); closePanel(); } mTapOk = false; });
 
 function openSounds(){
-  let html = '<button class="row" data-id="__load"><span>Load file…</span></button>';
+  let html = '<button class="row" data-id="__load"><span>Load file…</span></button><button class="row" data-id="__mic"><span>Record mic…</span></button>' + recMarkup();
   if (fileBuf) html += `<button class="row${S.sample === 'file' ? ' sel' : ''}" data-id="file"><span>${S.fileName}</span></button>`;
   for (const [cat, list] of SOUND_GROUPS){
     html += `<div class="row cat"><span>${cat[0] + cat.slice(1).toLowerCase()}</span></div>`;
@@ -978,9 +1095,15 @@ function openSounds(){
   }
   openPanel('Sounds', html);
   const sel = mBody.querySelector('.row.sel'); if (sel) sel.scrollIntoView({block:'center'});
+  mBody.querySelector('.recbox').hidden = !micTake;          // stays open while there's an unused take
+  if (micTake){ mBody.querySelector('[data-id="__mic"]').classList.add('open'); recUI(); requestAnimationFrame(drawWave); }
   mBody.onclick = e => {
+    const k = e.target.closest('.rk');
+    if (k){ if (k.disabled) return; const r = k.dataset.r;
+      if (r === 'rec') mic ? stopMic() : startMic(); else if (r === 'reset') resetMic(); else if (r === 'use') useMic(); return; }
     const b = e.target.closest('button.row'); if (!b) return;
     if (b.dataset.id === '__load'){ closePanel(); initAudio(); $('fileIn').click(); return; }
+    if (b.dataset.id === '__mic'){ const box = mBody.querySelector('.recbox'); box.hidden = !box.hidden; b.classList.toggle('open', !box.hidden); if (!box.hidden){ recUI(); drawWave(); } return; }
     setSample(b.dataset.id);
     mBody.querySelectorAll('.row.sel').forEach(r => r.classList.remove('sel')); b.classList.add('sel');
   };
@@ -993,20 +1116,26 @@ function openInfo(){
   mBody.onclick = null;
   const k = x => `<kbd>${x}</kbd>`, b = x => `<b>${x}</b>`;
   openPanel('Info', `<div class="prose">
-<p>Drag the sphere up to pull, down to push. Every knob owns a spot: pull there to raise it, push to lower it. Knobs resting at an end, like ${b('DRIVE')} or ${b('CUTOFF')}, move away from rest either way. Broad or hard strokes reach several spots at once.</p>
-<p>Hover a knob to see its spot, ${k('A')} to see all of them. Drag around the sphere to rotate, ${k('⇧')} + scroll or pinch to zoom.</p>
+<p>Drag the sphere up to pull, down to push. Drag around the sphere to rotate, ${k('⇧')} + scroll or pinch to zoom.</p>
+<p>Every knob owns a spot: pull there to raise it, push to lower it. Broad or hard strokes reach several spots at once. Knobs resting at an end, like ${b('DRIVE')} or ${b('CUTOFF')}, move away from rest either way.</p>
+<p>Hover a knob to see its axis, ${k('A')} to see all of them.</p>
 <p>${b('BRUSH')} sets stroke size: ${k('[')} ${k(']')}, scroll, or its knob.</p>
-<p>Drag knobs vertically, ${k('⇧')} for fine, double-click to reset. Grey means inactive until its partner moves. A knob name in <span class="r">red</span> means its spot is pushed past either end of its range; the sound holds at that end.</p>
+<p>Drag knobs vertically, double-click to reset. Grey means inactive until its partner moves. A knob name in <span class="r">red</span> means its spot is pushed past either end of its range; the sound holds at that end.</p>
 <p>${k('SPACE')} play · ${k('R')} reset sphere · ${k('⌘')} ${k('Z')} undo · ${k('⇧')} ${k('⌘')} ${k('Z')} redo · ${k('ESC')} close.</p>
-<p>Download ${b('1×')} renders one pass or one note. ${b('4×')} renders a seamless loop with reverb and echo tails wrapped to the start. Drop an audio file onto the sphere to load it.</p>
+<p>Tap the sound name to pick one of the sounds, load your own file or record from the mic. You can also drop an audio file onto the sphere.</p>
+<p>Download ${b('1×')} for one pass, ${b('4×')} for a seamless loop with reverb and echo tails wrapped to the start.</p>
 <p>${b('●')} records everything you play and tweak; press it again to save the take as a WAV.</p>
+<p>A <a href="https://ravipopat.info/maybe-machines" target="_blank" rel="noopener">Maybe Machine</a> by <a href="https://ravipopat.info" target="_blank" rel="noopener">Ravi Popat</a>.</p>
 </div>`, 'info');
 }
 $('infoBtn').addEventListener('click', openInfo);
 
-const COLOURS = ['#3a3a37','#2f63e0','#2ae22a','#ff5a1f','#ff6fb5'];   // charcoal, blue, green, orange, pink
+const COLOURS = ['#3a3a37','#2f63e0','#1fa81f','#ff5a1f','#ff6fb5'];   // charcoal, blue, green, orange, pink
 let sphereColour = '#3a3a37';                 // charcoal by default
 function setColour(c){ sphereColour = c; meshMat.uniforms.uColor.value.set(c);
+  { const lum = x => { const l = v => v <= 0.03928 ? v/12.92 : Math.pow((v + 0.055)/1.055, 2.4); const q = new THREE.Color(x); return 0.2126*l(q.r) + 0.7152*l(q.g) + 0.0722*l(q.b); };
+    const s = lum(c)*0.8, cr = (a, b) => (Math.max(a, b) + 0.05)/(Math.min(a, b) + 0.05);
+    axInvert = cr(lum(0xe6e6e2), s) > cr(lum(0x77776f), s); }
   const k = new THREE.Color(c).lerp(new THREE.Color(0xf7f7f4), 0.72); document.documentElement.style.setProperty('--tint', '#' + k.getHexString());
   const ac = new THREE.Color(c).lerp(new THREE.Color(0x000000), 0.28); document.documentElement.style.setProperty('--accent', '#' + ac.getHexString());
   // knobs follow the sphere: pointer in its colour, outline in a lighter tone of it
@@ -1055,6 +1184,8 @@ function resize(){
   const fit = Math.min(1, camera.aspect);
   baseDist = 1/(Math.tan(camera.fov*Math.PI/360)*0.8*fit);
   camera.updateProjectionMatrix();
+  // grain size: about 1.3 screen pixels at the resting size, then it's fixed to the surface
+  meshMat.uniforms.uGrain.value = 0.8*fit*(r.height/2)*renderer.getPixelRatio()/1.3;
 }
 new ResizeObserver(resize).observe(stage);
 
