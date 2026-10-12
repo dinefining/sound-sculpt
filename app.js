@@ -1125,7 +1125,7 @@ function openInfo(){
 <p>Tap the sound name to pick one of the sounds, load your own file or record from the mic. You can also drop an audio file onto the sphere.</p>
 <p>Download ${b('1×')} for one pass, ${b('4×')} for a seamless loop with reverb and echo tails wrapped to the start.</p>
 <p>${b('●')} records everything you play and tweak; press it again to save the take as a WAV.</p>
-<p>A <a href="https://ravipopat.info/maybe-machines" target="_blank" rel="noopener">Maybe Machine</a> by <a href="https://ravipopat.info" target="_blank" rel="noopener">Ravi Popat</a>.</p>
+<p>A <a href="https://maybemachines.com" target="_blank" rel="noopener">Maybe Machine</a> by <a href="https://ravipopat.info" target="_blank" rel="noopener">Ravi Popat</a>.</p>
 </div>`, 'info');
 }
 $('infoBtn').addEventListener('click', openInfo);
